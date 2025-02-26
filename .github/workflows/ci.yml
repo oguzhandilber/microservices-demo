@@ -56,14 +56,13 @@ jobs:
         run: dotnet CycloneDX -o . cartservice.sln
         working-directory: src/cartservice
       - name: Build SBOM package
-        run: >
-          octo pack
-          --id cartservice-sbom
-          --version ${{ steps.determine_version.outputs.semVer }}
-          --format zip
-          --include **/bom.xml
+        run: |
+          tar -czvf cartservice-sbom-${{ steps.determine_version.outputs.semVer }}.tar.gz bom.xml
         shell: bash
         working-directory: src/cartservice
+
+
+
       - name: Publish SBOM file
         run: >
           mvn deploy:deploy-file
