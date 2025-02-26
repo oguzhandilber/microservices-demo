@@ -1,38 +1,78 @@
-name: CI Pipeline
 
-on:
+name: Cart Service Docker Build
+'on':
+  workflow_dispatch: {}
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
+    paths:
+      - 'src/cartservice/**'
 jobs:
-  build_and_push:
+  build:
     runs-on: ubuntu-latest
-
-    env:
-      REGISTRY: docker.io
-      IMAGE_NAME: your-dockerhub-username/microservices-demo
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: '0'
+      - id: fixed_branch_name
+        name: Create branch name
+        run: |
+          BRANCH_NAME=${{ github.event.ref }}
+          BRANCH_NAME=${BRANCH_NAME#refs/heads/}
+          FIXED_BRANCH_NAME=${BRANCH_NAME//[^a-zA-Z0-9-]/-} 
+          echo "fixedbranch=$FIXED_BRANCH_NAME" >> $GITHUB_ENV
+        shell: bash
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
-          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push image
-        uses: docker/build-push-action@v4
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v0.9.14
         with:
-          context: .
+          versionSpec: 5.x
+      - id: determine_version
+        name: Determine Version
+        uses: gittools/actions/gitversion/execute@v0.9.14
+        with:
+          additionalArguments: /overrideconfig mode=Mainline
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: "{{defaultContext}}:src/cartservice/src"
           push: true
-          tags: ${{ env.IMAGE_NAME }}:latest
+          tags: case-study/cartservice:${{ steps.determine_version.outputs.semVer }}
+      - name: Set up DotNET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x
+      - name: Install CycloneDX
+        run: dotnet tool update --global CycloneDX
+        working-directory: src/cartservice
+      - name: Build SBOM
+        run: dotnet CycloneDX -o . cartservice.sln
+        working-directory: src/cartservice
+      - name: Build SBOM package
+        run: >
+          octo pack
+          --id cartservice-sbom
+          --version ${{ steps.determine_version.outputs.semVer }}
+          --format zip
+          --include **/bom.xml
+        shell: bash
+        working-directory: src/cartservice
+      - name: Publish SBOM file
+        run: >
+          mvn deploy:deploy-file
+          --batch-mode
+          -Dfile=cartservice-sbom.${{ steps.determine_version.outputs.semVer }}.zip
+          -Durl="https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@maven.pkg.github.com/${{ github.repository }}"
+          -DgroupId=microservices-demo
+          -DartifactId=cartservice-sbom
+          -Dversion=${{ steps.determine_version.outputs.semVer }}
+          -Dpackaging=zip;
+           exit 0
+        shell: "bash -l {0}" # Allow commands to fail by removing the default "-e" argument
+        working-directory: src/cartservice
