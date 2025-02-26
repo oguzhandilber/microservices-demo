@@ -71,6 +71,8 @@ adService:
       memory: 300Mi
 
 cartService:
+  images:
+      tag: "0.1.2273"
   create: true
   name: cartservice
   resources:
