@@ -48,9 +48,9 @@ jobs:
       - name: Set up DotNET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: 7.0.x
+          dotnet-version: 9.0.x
       - name: Install CycloneDX
-        run: dotnet tool update --global CycloneDX --version 4.6.0
+        run: dotnet tool update --global CycloneDX --version 5.0.1
         working-directory: src/cartservice
       - name: Build SBOM
         run: dotnet CycloneDX -o . cartservice.sln
