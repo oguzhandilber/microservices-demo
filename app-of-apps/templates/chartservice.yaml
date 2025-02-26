@@ -14,3 +14,6 @@ spec:
     path: helm-chart
     repoURL: {{ .Values.spec.source.repoURL }}
     targetRevision: {{ .Values.spec.source.targetRevision }}
+    helm:
+      valueFiles:
+      - values.yaml```
